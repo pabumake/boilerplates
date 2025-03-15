@@ -31,7 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-s
 
 **Quick execution:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-ssh-config/install-tools.sh | bash
+curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-troubleshooting/install-tools.sh | bash
 ```
 
 ---
