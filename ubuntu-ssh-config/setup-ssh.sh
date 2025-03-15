@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables
-AUTHORIZED_KEYS_URL="https://raw.githubusercontent.com/pabumake/boilerplates/refs/heads/main/ubuntu-ssh-config/id_ed25519_sk.pub?token=GHSAT0AAAAAAC6GYWLWK5YVLVPF772SXRQ4Z6WAEZA"
+AUTHORIZED_KEYS_URL="https://raw.githubusercontent.com/pabumake/boilerplates/refs/heads/main/ubuntu-ssh-config/id_ed25519_sk.pub"
 SSH_CONFIG_URL="https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-ssh-config/50-ssh.conf"
 SSHD_CONFIG_DIR="/etc/ssh/sshd_config.d"
 AUTHORIZED_KEYS_FILE="$HOME/.ssh/authorized_keys"
