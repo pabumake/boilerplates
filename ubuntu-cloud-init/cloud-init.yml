@@ -1,0 +1,51 @@
+#cloud-config
+
+users:
+  - name: pbmk  # Change to your actual username
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJZJElrbRJPZZQSwwEsoLLCmiijlxh3uHw0QNBa/5Q6Z opentofu automation key  # Replace with your SSH public key
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: docker  # Ensure user is added to the Docker group
+
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - git
+  - docker.io
+  - docker-compose
+  - ufw
+  - nano
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-custom.conf
+    content: |
+      Port 22
+      PubkeyAuthentication yes
+      PubkeyAuthOptions verify-required
+      PasswordAuthentication no
+      PermitEmptyPasswords no
+    owner: root:root
+    permissions: '0644'
+
+runcmd:
+  - systemctl restart sshd  # Restart SSH service to apply changes
+  - echo "127.0.1.1 $(hostname)" | tee -a /etc/hosts  # Ensure hostname resolves correctly
+  - ufw allow OpenSSH
+  - ufw enable
+  - systemctl start sshd
+  - systemctl enable sshd
+  - systemctl start docker
+  - systemctl enable docker
+  - usermod -aG docker pbmk  # Add user to Docker group
+  
+  # Uncomment to enable Docker Swarm setup
+  # - docker swarm init || echo "Swarm already initialized"
+  
+  # Uncomment to clone and execute additional automation scripts from GitHub
+  # - mkdir -p /opt/setup
+  # - cd /opt/setup && git clone https://github.com/YOUR_GITHUB_REPO.git
+  # - cd /opt/setup/YOUR_GITHUB_REPO && chmod +x setup.sh && ./setup.sh
+  
+  - reboot
