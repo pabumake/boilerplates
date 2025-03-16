@@ -2,7 +2,7 @@
 
 # Check for necessary environment variables
 : "${MAIN_DOMAIN:?Please set MAIN_DOMAIN (e.g., example.com)}"
-: "${EMAIL:?You must set EMAIL for Let's Encrypt notifications}" 
+: "${EMAIL:?You must set EMAIL for Lets Encrypt notifications}" 
 : "${TRAEFIK_DASHBOARD_USER:?You must set TRAEFIK_DASHBOARD_USER}" 
 : "${TRAEFIK_DASHBOARD_PASSWORD:?You must set TRAEFIK_DASHBOARD_PASSWORD}"
 
