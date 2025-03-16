@@ -2,7 +2,7 @@
 
 Once Ubuntu is installed, run the following on your new server:
 ```bash
-curl -o cloud-init.yaml https://raw.githubusercontent.com/YOUR_GITHUB_REPO/main/cloud-init.yaml
+curl -o cloud-init.yaml https://raw.githubusercontent.com/pabumake/boilerplates/refs/heads/main/ubuntu-cloud-init/cloud-init.yml
 sudo cloud-init init --file cloud-init.yaml
 ```
 
