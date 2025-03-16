@@ -17,6 +17,7 @@ packages:
   - docker-compose
   - ufw
   - nano
+  - update-manager-core
 
 write_files:
   - path: /etc/ssh/sshd_config.d/99-custom.conf
