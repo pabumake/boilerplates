@@ -36,6 +36,39 @@ curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-t
 
 ---
 
+### 🐳 setup-2-node-swarm.sh
+
+- Purpose: Sets up a Docker Swarm cluster with two nodes:
+- docker0 (Manager) with IP 192.168.1.10
+- docker1 (Worker) with IP 192.168.1.11
+  
+Features:
+- Installs Docker and Docker Compose on both nodes.
+- Initializes the Swarm on the manager node and joins the worker node to the Swarm.
+
+**Quick execution:**
+
+On the Manager Node (docker0):
+```bash
+curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-swarm/setup-2-node-swarm.sh | bash -s manager
+```
+
+On the Worker Node (docker1):
+```bash
+curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-swarm/setup-2-node-swarm.sh | bash -s worker
+```
+
+Note: 
+- Replace your_username with your actual username on both machines.
+- Ensure that SSH key-based authentication is set up between the manager and worker nodes for passwordless SSH access.
+- After running the scripts, verify the Swarm status on the manager node (docker0) by executing:
+```bash
+sudo docker node ls
+````
+
+
+---
+
 ## Usage
 
 Simply copy and execute the provided commands directly on your Ubuntu machine for a fast and reliable setup.
