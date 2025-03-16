@@ -1,37 +1,13 @@
 #!/bin/bash
 
-# Function to re-execute the script with sudo
-function elevate_privileges() {
-    if [ "$EUID" -ne 0 ]; then
-        echo "Re-running script with elevated privileges..."
-        sudo "$0" "$@"
-        exit $?
-    fi
-}
+# Auto-elevate script permissions with sudo if necessary
+[ "$EUID" -ne 0 ] && exec sudo -E bash "$0" "$@"
 
-# Elevate privileges if not already running as root
-elevate_privileges "$@"
-
-# Prompt for the main domain
+# Prompt for user inputs
 read -p "Enter your main domain (e.g., example.com): " MAIN_DOMAIN
-
-# Prompt for the email address to be used with Let's Encrypt
 read -p "Enter your email address for Let's Encrypt notifications: " EMAIL
 
-# Variables
-TRAEFIK_NETWORK="traefik-public"
-TRAEFIK_VERSION="docker.io/library/traefik:latest"
-PORTAINER_VERSION="portainer/portainer-ce:latest"
-ACME_FILE="/mnt/data/traefik/acme.json"
-
-# Set subdomains based on the main domain
-TRAEFIK_SUBDOMAIN="traefik.${MAIN_DOMAIN}"
-PORTAINER_SUBDOMAIN="portainer.${MAIN_DOMAIN}"
-
-# Read Traefik dashboard credentials from environment variables or prompt the user
-TRAEFIK_DASHBOARD_USER="${TRAEFIK_DASHBOARD_USER:-}"
-TRAEFIK_DASHBOARD_PASSWORD="${TRAEFIK_DASHBOARD_PASSWORD:-}"
-
+# Prompt for Traefik dashboard credentials if not set
 if [ -z "$TRAEFIK_DASHBOARD_USER" ]; then
   read -p "Enter Traefik dashboard username: " TRAEFIK_DASHBOARD_USER
 fi
@@ -41,22 +17,33 @@ if [ -z "$TRAEFIK_DASHBOARD_PASSWORD" ]; then
   echo
 fi
 
-# Initialize Docker Swarm (if not already initialized)
+# Variables
+TRAEFIK_NETWORK="traefik-public"
+TRAEFIK_VERSION="docker.io/library/traefik:latest"
+PORTAINER_VERSION="portainer/portainer-ce:latest"
+ACME_FILE="/mnt/data/traefik/acme.json"
+TRAEFIK_SUBDOMAIN="traefik.${MAIN_DOMAIN}"
+PORTAINER_SUBDOMAIN="portainer.${MAIN_DOMAIN}"
+
+# Initialize Docker Swarm (if needed)
 docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')" || true
 
-# Create Traefik network
-docker network create --driver=overlay "$TRAEFIK_NETWORK" || true
+# Create Traefik network if not existing
+docker network inspect $TRAEFIK_NETWORK >/dev/null 2>&1 || \
+docker network create --driver=overlay --scope=swarm $TRAEFIK_NETWORK
 
-# Create necessary directories and files for Traefik
+# Prepare directories and files for Traefik
 mkdir -p /mnt/data/traefik
 touch "$ACME_FILE"
 chmod 600 "$ACME_FILE"
 
-# Generate htpasswd for Traefik dashboard authentication
+# Encrypt Traefik dashboard password
 TRAEFIK_DASHBOARD_PASSWORD_ENCRYPTED=$(openssl passwd -apr1 "$TRAEFIK_DASHBOARD_PASSWORD")
 
-# Create Docker Compose file
+# Generate the docker-compose.yml with correctly expanded variables
 cat << EOF > docker-compose.yml
+version: "3.8"
+
 services:
   traefik:
     image: "${TRAEFIK_VERSION}"
@@ -84,11 +71,11 @@ services:
           - node.role == manager
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.traefik.rule=Host(\`${TRAEFIK_SUBDOMAIN}\`)"
-        - "traefik.http.routers.traefik.service=api@internal"
+        - "traefik.http.routers.traefik.rule=Host(\`traefik.${MAIN_DOMAIN}\`)"
         - "traefik.http.routers.traefik.entrypoints=websecure"
+        - "traefik.http.routers.traefik.service=api@internal"
         - "traefik.http.routers.traefik.tls.certresolver=le"
-        - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_USER}:${TRAEFIK_DASHBOARD_PASSWORD_ENCRYPTED}"
+        - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_USER}:$(openssl passwd -apr1 ${TRAEFIK_DASHBOARD_PASSWORD})"
         - "traefik.http.routers.traefik.middlewares=auth"
 
   portainer:
@@ -105,7 +92,7 @@ services:
           - node.role == manager
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.portainer.rule=Host(\`${PORTAINER_SUBDOMAIN}\`)"
+        - "traefik.http.routers.portainer.rule=Host(\`portainer.${MAIN_DOMAIN}\`)"
         - "traefik.http.routers.portainer.entrypoints=websecure"
         - "traefik.http.routers.portainer.tls.certresolver=le"
 
@@ -119,3 +106,7 @@ EOF
 
 # Deploy the stack
 docker stack deploy -c docker-compose.yml traefik_portainer
+
+echo "Deployment complete! Access your services:"
+echo "Traefik: https://traefik.${MAIN_DOMAIN}"
+echo "Portainer: https://portainer.${MAIN_DOMAIN}"
