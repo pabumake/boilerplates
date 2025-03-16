@@ -1,11 +1,12 @@
 #!/bin/bash
 
-# Variables, adjust accordingly
+# Variables
 ROLE=$1
 MANAGER_IP="192.168.1.10"
 WORKER_IP="192.168.1.11"
 USER="pbmk"
 DOCKER_COMPOSE_VERSION="2.34.0"
+SSH_KEY="$HOME/.ssh/id_rsa"
 
 # Function to install Docker
 install_docker() {
@@ -57,6 +58,23 @@ install_docker_compose() {
   docker-compose --version
 }
 
+# Function to generate SSH key
+generate_ssh_key() {
+  if [ ! -f "$SSH_KEY" ]; then
+    echo "Generating SSH key..."
+    ssh-keygen -t rsa -b 4096 -N "" -f "$SSH_KEY"
+  else
+    echo "SSH key already exists."
+  fi
+}
+
+# Function to copy SSH key to remote host
+copy_ssh_key() {
+  local remote_host=$1
+  echo "Copying SSH key to $remote_host..."
+  sshpass -p "remote_user_password" ssh-copy-id -i "$SSH_KEY.pub" "$USER@$remote_host"
+}
+
 # Function to initialize Docker Swarm
 initialize_swarm() {
   echo "Initializing Docker Swarm on manager node..."
@@ -76,9 +94,13 @@ join_swarm() {
 if [ "$ROLE" == "manager" ]; then
   install_docker
   install_docker_compose
+  generate_ssh_key
+  copy_ssh_key $WORKER_IP
   initialize_swarm
 elif [ "$ROLE" == "worker" ]; then
   install_docker
+  generate_ssh_key
+  copy_ssh_key $MANAGER_IP
   join_swarm
 else
   echo "Invalid role specified. Use 'manager' or 'worker'."
