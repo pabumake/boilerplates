@@ -39,7 +39,11 @@ runcmd:
   - systemctl start docker
   - systemctl enable docker
   - usermod -aG docker pbmk  # Add user to Docker group
-  
+
+  # Upgrade to the latest LTS version (if available)
+  - apt update && apt full-upgrade -y
+  - apt autoremove -y
+  - do-release-upgrade -f DistUpgradeViewNonInteractive || echo "No new release found."
   # Uncomment to enable Docker Swarm setup
   # - docker swarm init || echo "Swarm already initialized"
   
