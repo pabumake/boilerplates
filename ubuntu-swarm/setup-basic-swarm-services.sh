@@ -1,13 +1,10 @@
 #!/bin/bash
 
-# Auto-elevate script permissions with sudo if necessary
-[ "$EUID" -ne 0 ] && exec sudo -E bash "$0" "$@"
-
 # Prompt for user inputs
 read -p "Enter your main domain (e.g., example.com): " MAIN_DOMAIN
 read -p "Enter your email address for Let's Encrypt notifications: " EMAIL
 
-# Prompt for Traefik dashboard credentials if not set
+# Prompt for Traefik dashboard credentials if not set via environment
 if [ -z "$TRAEFIK_DASHBOARD_USER" ]; then
   read -p "Enter Traefik dashboard username: " TRAEFIK_DASHBOARD_USER
 fi
@@ -25,23 +22,24 @@ ACME_FILE="/mnt/data/traefik/acme.json"
 TRAEFIK_SUBDOMAIN="traefik.${MAIN_DOMAIN}"
 PORTAINER_SUBDOMAIN="portainer.${MAIN_DOMAIN}"
 
-# Initialize Docker Swarm (if needed)
+# Ensure Docker Swarm is initialized
 docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')" || true
 
-# Create Traefik network if not existing
+# Create Traefik overlay network if not existing
 docker network inspect $TRAEFIK_NETWORK >/dev/null 2>&1 || \
 docker network create --driver=overlay --scope=swarm $TRAEFIK_NETWORK
 
-# Prepare directories and files for Traefik
-mkdir -p /mnt/data/traefik
-touch "$ACME_FILE"
-chmod 600 "$ACME_FILE"
+# Prepare directories and files for Traefik with sudo
+sudo mkdir -p /mnt/data/traefik
+sudo touch "$ACME_FILE"
+sudo chmod 600 "$ACME_FILE"
+sudo chown "$(whoami)":"$(whoami)" "$ACME_FILE"
 
 # Encrypt Traefik dashboard password
 TRAEFIK_DASHBOARD_PASSWORD_ENCRYPTED=$(openssl passwd -apr1 "$TRAEFIK_DASHBOARD_PASSWORD")
 
-# Generate the docker-compose.yml with correctly expanded variables
-cat << EOF > docker-compose.yml
+# Generate docker-compose.yml with expanded variables
+cat <<EOF > docker-compose.yml
 version: "3.8"
 
 services:
@@ -71,11 +69,11 @@ services:
           - node.role == manager
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.traefik.rule=Host(\`traefik.${MAIN_DOMAIN}\`)"
+        - "traefik.http.routers.traefik.rule=Host(\`${TRAEFIK_SUBDOMAIN}\`)"
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.service=api@internal"
         - "traefik.http.routers.traefik.tls.certresolver=le"
-        - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_USER}:$(openssl passwd -apr1 ${TRAEFIK_DASHBOARD_PASSWORD})"
+        - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_USER}:${TRAEFIK_DASHBOARD_PASSWORD_ENCRYPTED}"
         - "traefik.http.routers.traefik.middlewares=auth"
 
   portainer:
@@ -92,7 +90,7 @@ services:
           - node.role == manager
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.portainer.rule=Host(\`portainer.${MAIN_DOMAIN}\`)"
+        - "traefik.http.routers.portainer.rule=Host(\`${PORTAINER_SUBDOMAIN}\`)"
         - "traefik.http.routers.portainer.entrypoints=websecure"
         - "traefik.http.routers.portainer.tls.certresolver=le"
 
@@ -108,5 +106,5 @@ EOF
 docker stack deploy -c docker-compose.yml traefik_portainer
 
 echo "Deployment complete! Access your services:"
-echo "Traefik: https://traefik.${MAIN_DOMAIN}"
-echo "Portainer: https://portainer.${MAIN_DOMAIN}"
+echo "Traefik: https://${TRAEFIK_SUBDOMAIN}"
+echo "Portainer: https://${PORTAINER_SUBDOMAIN}"
