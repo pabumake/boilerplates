@@ -1,60 +1,77 @@
 #!/bin/bash
 
-# Prompt only if variables not set via environment
-MAIN_DOMAIN="${MAIN_DOMAIN:-}"
-EMAIL="${EMAIL:-}"
-TRAEFIK_DASHBOARD_USER="${TRAEFIK_DASHBOARD_USER:-}"
-TRAEFIK_DASHBOARD_PASSWORD="${TRAEFIK_DASHBOARD_PASSWORD:-}"
+# Check for necessary environment variables
+: "${MAIN_DOMAIN:?Please set MAIN_DOMAIN (e.g., example.com)}"
+: "${EMAIL:?You must set EMAIL for Let's Encrypt notifications}" 
+: "${TRAEFIK_DASHBOARD_USER:?You must set TRAEFIK_DASHBOARD_USER}" 
+: "${TRAEFIK_DASHBOARD_PASSWORD:?You must set TRAEFIK_DASHBOARD_PASSWORD}"
 
-if [ -z "$MAIN_DOMAIN" ] || [ -z "$EMAIL" ] || [ -z "$TRAEFIK_DASHBOARD_USER" ] || [ -z "$TRAEFIK_DASHBOARD_PASSWORD" ]; then
-    echo "You must set the following environment variables to run this script:"
-    echo "  export MAIN_DOMAIN=yourdomain.com"
-    echo "  export EMAIL=you@example.com"
-    echo "  export TRAEFIK_DASHBOARD_USER=username"
-    echo "  export TRAEFIK_DASHBOARD_PASSWORD=password"
-    exit 1
-fi
+# Ensure script runs with necessary privileges
+[ "$EUID" -ne 0 ] && exec sudo -E bash "$0" "$@"
 
+# Variables
 TRAEFIK_NETWORK="traefik-public"
-TRAEFIK_VERSION="docker.io/library/traefik:latest"
+TRAEFIK_VERSION="traefik:v3.3"
 PORTAINER_VERSION="portainer/portainer-ce:latest"
 ACME_FILE="/mnt/data/traefik/acme.json"
 TRAEFIK_SUBDOMAIN="traefik.${MAIN_DOMAIN}"
 PORTAINER_SUBDOMAIN="portainer.${MAIN_DOMAIN}"
 
+# Initialize Docker Swarm (if necessary)
 docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')" || true
+
+# Create Traefik network if not existing
 docker network inspect $TRAEFIK_NETWORK >/dev/null 2>&1 || \
-docker network create --driver=overlay --scope=swarm $TRAEFIK_NETWORK
+docker network create --driver=overlay --attachable $TRAEFIK_NETWORK
 
-sudo mkdir -p /mnt/data/traefik
-sudo touch "$ACME_FILE"
-sudo chmod 600 "$ACME_FILE"
+# Create necessary directories and files
+mkdir -p /mnt/data/traefik
+ACME_FILE="/mnt/data/traefik/acme.json"
+touch "$ACME_FILE"
+chmod 600 "$ACME_FILE"
 
+# Generate Traefik dashboard credentials
 TRAEFIK_DASHBOARD_PASSWORD_ENCRYPTED=$(openssl passwd -apr1 "$TRAEFIK_DASHBOARD_PASSWORD")
 
+# Generate traefik.yml (static configuration for v3)
+cat << EOF > traefik.yml
+api:
+  dashboard: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  swarm:
+    endpoint: "unix:///var/run/docker.sock"
+
+certificatesResolvers:
+  le:
+    acme:
+      email: "${EMAIL}"
+      storage: "/letsencrypt/acme.json"
+      tlsChallenge: {}
+EOF
+
 # Generate docker-compose.yml
-cat <<EOF > docker-compose.yml
+cat << EOF > docker-compose.yml
 version: "3.8"
 
 services:
   traefik:
-    image: "docker.io/library/traefik:latest"
+    image: "traefik:v3.3"
     command:
-      - --log.level=INFO
-      - --api.dashboard=true
-      - --providers.docker.swarmMode=true
-      - --providers.docker.network=${TRAEFIK_NETWORK}
-      - --entryPoints.web.address=:80
-      - --entryPoints.websecure.address=:443
-      - --certificatesResolvers.le.acme.email=${EMAIL}
-      - --certificatesResolvers.le.acme.storage=/letsencrypt/acme.json
-      - --certificatesResolvers.le.acme.tlsChallenge=true
+      - --configFile=/traefik.yml
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "${ACME_FILE}:/letsencrypt/acme.json"
+      - "./traefik.yml:/traefik.yml:ro"
     networks:
       - ${TRAEFIK_NETWORK}
     deploy:
@@ -67,7 +84,7 @@ services:
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.service=api@internal"
         - "traefik.http.routers.traefik.tls.certresolver=le"
-        - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_USER}:$(openssl passwd -apr1 ${TRAEFIK_DASHBOARD_PASSWORD})"
+        - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_USER}:${TRAEFIK_DASHBOARD_PASSWORD_ENCRYPTED}"
         - "traefik.http.routers.traefik.middlewares=auth"
 
   portainer:
@@ -87,6 +104,7 @@ services:
         - "traefik.http.routers.portainer.rule=Host(\`${PORTAINER_SUBDOMAIN}\`)"
         - "traefik.http.routers.portainer.entrypoints=websecure"
         - "traefik.http.routers.portainer.tls.certresolver=le"
+        - "traefik.http.services.portainer.loadbalancer.server.port=9000"
 
 networks:
   ${TRAEFIK_NETWORK}:
@@ -96,7 +114,10 @@ volumes:
   portainer_data:
 EOF
 
+# Deploy stack
 docker stack deploy -c docker-compose.yml traefik_portainer
 
-echo "Traefik: https://${TRAEFIK_SUBDOMAIN}"
-echo "Portainer: https://${PORTAINER_SUBDOMAIN}"
+# Output information
+echo "Deployment complete! Access your services at:"
+echo "Traefik Dashboard: https://${TRAEFIK_SUBDOMAIN}"
+echo "Portainer Dashboard: https://${PORTAINER_SUBDOMAIN}"
