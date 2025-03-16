@@ -1,5 +1,17 @@
 #!/bin/bash
 
+# Function to re-execute the script with sudo
+function elevate_privileges() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Re-running script with elevated privileges..."
+        sudo "$0" "$@"
+        exit $?
+    fi
+}
+
+# Elevate privileges if not already running as root
+elevate_privileges "$@"
+
 # Prompt for the main domain
 read -p "Enter your main domain (e.g., example.com): " MAIN_DOMAIN
 
@@ -29,22 +41,16 @@ if [ -z "$TRAEFIK_DASHBOARD_PASSWORD" ]; then
   echo
 fi
 
-# Ensure the script is run as root
-if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root or use sudo"
-  exit
-fi
-
 # Initialize Docker Swarm (if not already initialized)
-docker swarm init --advertise-addr $(hostname -I | awk '{print $1}') || true
+docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')" || true
 
 # Create Traefik network
-docker network create --driver=overlay $TRAEFIK_NETWORK || true
+docker network create --driver=overlay "$TRAEFIK_NETWORK" || true
 
 # Create necessary directories and files for Traefik
 mkdir -p /mnt/data/traefik
-touch $ACME_FILE
-chmod 600 $ACME_FILE
+touch "$ACME_FILE"
+chmod 600 "$ACME_FILE"
 
 # Generate htpasswd for Traefik dashboard authentication
 TRAEFIK_DASHBOARD_PASSWORD_ENCRYPTED=$(openssl passwd -apr1 "$TRAEFIK_DASHBOARD_PASSWORD")
