@@ -66,8 +66,52 @@ Note:
 - After running the scripts, verify the Swarm status on the manager node (docker0) by executing:
 ```bash
 sudo docker node ls
-````
+```
 
+
+---
+
+### 🐳 setup-basic-swarm-services.sh
+
+Purpose: Deploys Traefik and Portainer services within an existing Docker Swarm cluster.
+
+Features:
+- Traefik:
+- Deploys Traefik as a reverse proxy and load balancer.
+- Configures automatic SSL certificate generation using Let’s Encrypt.
+- Secures the Traefik dashboard with basic authentication.
+- Portainer:
+- Deploys Portainer for Docker management with a user-friendly web interface.
+- Integrates Portainer behind Traefik for secure access.
+
+Quick execution:
+
+To execute the script directly from the repository, use the following command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-swarm/setup-basic-swarm-services.sh | bash
+```
+
+This command fetches and executes the script in a single step.  ￼
+
+During execution, the script will prompt for the following information:
+- Main Domain: The primary domain under which Traefik and Portainer will be accessible (e.g., example.com).
+- Email Address: Your email address for Let’s Encrypt notifications. ￼
+- Traefik Dashboard Username: Username for accessing the Traefik dashboard.
+- Traefik Dashboard Password: Password for the Traefik dashboard.
+
+Post-Execution:
+- Access Traefik Dashboard: Navigate to https://traefik.<your_main_domain> and log in using the credentials provided during setup.
+- Access Portainer: Navigate to https://portainer.<your_main_domain> to manage your Docker services.
+
+Notes:
+- Ensure that DNS records for traefik.<your_main_domain> and portainer.<your_main_domain> point to your server’s IP address.
+- Verify that ports 80 and 443 are open and accessible to allow HTTP and HTTPS traffic.
+- For detailed configurations and advanced setups, refer to the official documentation of Traefik and Portainer.
+
+⸻
+
+By following the steps above, you can seamlessly deploy and manage Traefik and Portainer within your Docker Swarm environment.
 
 ---
 
