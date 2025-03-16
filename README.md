@@ -38,6 +38,8 @@ curl -fsSL https://raw.githubusercontent.com/pabumake/boilerplates/main/ubuntu-t
 
 ### 🐳 setup-2-node-swarm.sh
 
+Note: It is recommendet to run this before you run the ubuntu-ssh-config, because we require password authentication to setup docker
+
 - Purpose: Sets up a Docker Swarm cluster with two nodes:
 - docker0 (Manager) with IP 192.168.1.10
 - docker1 (Worker) with IP 192.168.1.11
